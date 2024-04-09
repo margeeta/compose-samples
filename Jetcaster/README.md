@@ -17,7 +17,7 @@ project from Android Studio following the steps
 
 ## Features
 
-This sample has 3 components: the home scree, the podcast details screen, and the player screen
+This sample has 3 components: the home screen, the podcast details screen, and the player screen
 
 The home screen is split into sub-screens for easy re-use:
 
