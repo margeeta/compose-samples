@@ -56,14 +56,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -99,6 +103,7 @@ import com.example.jetcaster.util.verticalGradientScrim
 import com.google.accompanist.adaptive.HorizontalTwoPaneStrategy
 import com.google.accompanist.adaptive.TwoPane
 import com.google.accompanist.adaptive.VerticalTwoPaneStrategy
+import kotlinx.coroutines.launch
 import java.time.Duration
 
 /**
@@ -113,10 +118,10 @@ fun PlayerScreen(
 ) {
     val uiState = viewModel.uiState
     PlayerScreen(
-        uiState,
-        windowSizeClass,
-        displayFeatures,
-        onBackPress,
+        uiState = uiState,
+        windowSizeClass = windowSizeClass,
+        displayFeatures = displayFeatures,
+        onBackPress = onBackPress,
         onPlayPress = viewModel::onPlay,
         onPausePress = viewModel::onPause,
         onAdvanceBy = viewModel::onAdvanceBy,
@@ -124,6 +129,7 @@ fun PlayerScreen(
         onStop = viewModel::onStop,
         onNext = viewModel::onNext,
         onPrevious = viewModel::onPrevious,
+        onAddToQueue = viewModel::onAddToQueue,
     )
 }
 
@@ -143,6 +149,7 @@ private fun PlayerScreen(
     onStop: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onAddToQueue: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     DisposableEffect(Unit) {
@@ -150,19 +157,35 @@ private fun PlayerScreen(
             onStop()
         }
     }
-    Surface(modifier) {
+
+    val coroutineScope = rememberCoroutineScope()
+    val snackBarText = stringResource(id = R.string.episode_added_to_your_queue)
+    val snackbarHostState = remember { SnackbarHostState() }
+    Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
+        modifier = modifier
+    ) { contentPadding ->
         if (uiState.episodePlayerState.currentEpisode != null) {
             PlayerContentWithBackground(
-                uiState,
-                windowSizeClass,
-                displayFeatures,
-                onBackPress,
-                onPlayPress,
-                onPausePress,
-                onAdvanceBy,
-                onRewindBy,
-                onNext,
-                onPrevious,
+                uiState = uiState,
+                windowSizeClass = windowSizeClass,
+                displayFeatures = displayFeatures,
+                onBackPress = onBackPress,
+                onPlayPress = onPlayPress,
+                onPausePress = onPausePress,
+                onAdvanceBy = onAdvanceBy,
+                onRewindBy = onRewindBy,
+                onNext = onNext,
+                onPrevious = onPrevious,
+                onAddToQueue = {
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(snackBarText)
+                    }
+                    onAddToQueue()
+                },
+                modifier = Modifier.padding(contentPadding)
             )
         } else {
             FullScreenLoading()
@@ -194,6 +217,7 @@ fun PlayerContentWithBackground(
     onRewindBy: (Duration) -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onAddToQueue: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -202,16 +226,17 @@ fun PlayerContentWithBackground(
             modifier = Modifier.fillMaxSize()
         )
         PlayerContent(
-            uiState,
-            windowSizeClass,
-            displayFeatures,
-            onBackPress,
-            onPlayPress,
-            onPausePress,
-            onAdvanceBy,
-            onRewindBy,
-            onNext,
-            onPrevious,
+            uiState = uiState,
+            windowSizeClass = windowSizeClass,
+            displayFeatures = displayFeatures,
+            onBackPress = onBackPress,
+            onPlayPress = onPlayPress,
+            onPausePress = onPausePress,
+            onAdvanceBy = onAdvanceBy,
+            onRewindBy = onRewindBy,
+            onNext = onNext,
+            onPrevious = onPrevious,
+            onAddToQueue = onAddToQueue
         )
     }
 }
@@ -228,6 +253,7 @@ fun PlayerContent(
     onRewindBy: (Duration) -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onAddToQueue: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val foldingFeature = displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
@@ -265,6 +291,7 @@ fun PlayerContent(
                         onRewindBy = onRewindBy,
                         onNext = onNext,
                         onPrevious = onPrevious,
+                        onAddToQueue = onAddToQueue,
                     )
                 },
                 strategy = VerticalTwoPaneStrategy(splitFraction = 0.5f),
@@ -283,7 +310,10 @@ fun PlayerContent(
                     .systemBarsPadding()
                     .padding(horizontal = 8.dp)
             ) {
-                TopAppBar(onBackPress = onBackPress)
+                TopAppBar(
+                    onBackPress = onBackPress,
+                    onAddToQueue = onAddToQueue,
+                )
                 TwoPane(
                     first = {
                         PlayerContentBookStart(uiState = uiState)
@@ -306,15 +336,16 @@ fun PlayerContent(
         }
     } else {
         PlayerContentRegular(
-            uiState,
-            onBackPress,
-            onPlayPress,
-            onPausePress,
+            uiState = uiState,
+            onBackPress = onBackPress,
+            onPlayPress = onPlayPress,
+            onPausePress = onPausePress,
             onAdvanceBy = onAdvanceBy,
             onRewindBy = onRewindBy,
             onNext = onNext,
             onPrevious = onPrevious,
-            modifier,
+            onAddToQueue = onAddToQueue,
+            modifier = modifier,
         )
     }
 }
@@ -332,6 +363,7 @@ private fun PlayerContentRegular(
     onRewindBy: (Duration) -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onAddToQueue: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val playerEpisode = uiState.episodePlayerState
@@ -347,7 +379,10 @@ private fun PlayerContentRegular(
             .systemBarsPadding()
             .padding(horizontal = 8.dp)
     ) {
-        TopAppBar(onBackPress = onBackPress)
+        TopAppBar(
+            onBackPress = onBackPress,
+            onAddToQueue = onAddToQueue,
+        )
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 8.dp)
@@ -428,6 +463,7 @@ private fun PlayerContentTableTopBottom(
     onRewindBy: (Duration) -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onAddToQueue: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val episodePlayerState = uiState.episodePlayerState
@@ -443,7 +479,10 @@ private fun PlayerContentTableTopBottom(
             .padding(horizontal = 32.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        TopAppBar(onBackPress = onBackPress)
+        TopAppBar(
+            onBackPress = onBackPress,
+            onAddToQueue = onAddToQueue,
+        )
         PodcastDescription(
             title = episode.title,
             podcastName = episode.podcastName,
@@ -552,7 +591,10 @@ private fun PlayerContentBookEnd(
 }
 
 @Composable
-private fun TopAppBar(onBackPress: () -> Unit) {
+private fun TopAppBar(
+    onBackPress: () -> Unit,
+    onAddToQueue: () -> Unit,
+) {
     Row(Modifier.fillMaxWidth()) {
         IconButton(onClick = onBackPress) {
             Icon(
@@ -561,7 +603,7 @@ private fun TopAppBar(onBackPress: () -> Unit) {
             )
         }
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = { /* TODO */ }) {
+        IconButton(onClick = onAddToQueue) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
                 contentDescription = stringResource(R.string.cd_add)
@@ -574,6 +616,13 @@ private fun TopAppBar(onBackPress: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun PlayerCarousel(
+    modifier: Modifier = Modifier
+) {
+    
 }
 
 @Composable
@@ -782,7 +831,10 @@ private fun FullScreenLoading(modifier: Modifier = Modifier) {
 @Composable
 fun TopAppBarPreview() {
     JetcasterTheme {
-        TopAppBar(onBackPress = { })
+        TopAppBar(
+            onBackPress = {},
+            onAddToQueue = {},
+        )
     }
 }
 
@@ -832,7 +884,8 @@ fun PlayerScreenPreview() {
                 onRewindBy = {},
                 onStop = {},
                 onNext = {},
-                onPrevious = {}
+                onPrevious = {},
+                onAddToQueue = {},
             )
         }
     }
